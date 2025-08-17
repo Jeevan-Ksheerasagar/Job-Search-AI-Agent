@@ -1,0 +1,874 @@
+{
+  "name": "Job Search",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# Job Scrapper \n",
+        "height": 288,
+        "width": 1568,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        -208
+      ],
+      "id": "73a41df5-726b-46e5-bb16-642881f3e4fe",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -688,
+        -112
+      ],
+      "id": "edb09966-fdf1-43df-a3a7-43eb1201a453",
+      "name": "Start"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "237238b9-eed1-4ad7-a7d0-54fecdb2c10f",
+              "leftValue": "={{ $json.message.content.compatibility_score }}",
+              "rightValue": 60,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        416,
+        176
+      ],
+      "id": "be0f239d-10c8-4a62-9fc2-7a65014eebcd",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-1.5-flash-latest",
+          "mode": "list",
+          "cachedResultName": "models/gemini-1.5-flash-latest"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You're an intelligent bot capable of filtering jobs from the job details.",
+              "role": "model"
+            },
+            {
+              "content": "=You are a job filtering AI for a product manager with 3-4 years of experience. Analyze this job posting with my actual profile to determine if it's a good fit.\n\nMY ACTUAL PROFILE:\nResume: {{ $('Get Resume').item.json.content }}\nLinkedIn Profile:{{ $('Get Profile').item.json.content }}\n\nSTRICT FILTERING RULES:\nACCEPT IF THESE CONDITIONS ARE MET:\n- Experience: 0-4 years (not 5+ years), 3 years of experience in product management \n- Job Title: Product Manager, Associate, Junior, Entry-level, New Grad, APM, Graduate\n- Employment: Full-time positions only\n- No Senior Language: Zero mentions of \"senior,\" \"lead,\" \"principal,\" \"director,\" \"manager II+,\" \"staff\"\n- Requirements: No \"5+ years,\"\n\nREJECT IF ANY CONDITION IS FOUND:\n- Experience Requirements: 4+ years and above, \"several years,\" \"extensive\"\n- Senior Titles: Senior PM, Lead PM, Principal PM, Director, VP, Head of Product\n- Employment Types: Contract, Consultant, Freelance, Part-time, Internship\n- Industry Experience: \"10+ years in [industry]\"\n\nJOB DATA:\nTitle: {{ $json.title }}\nSeniority: {{ $json.seniorityLevel }}\nEmployment: {{ $json.employmentType }}\nDescription: {{ $json.descriptionText }}\nCompany: {{ $json.companyName }}\n\nANALYSIS PROCESS:\n1. Check the title for entry-level indicators vs senior keywords\n2. Scan description for experience requirements (numbers + \"years\")\n3. Verify employment type is full-time\n\nIMPORTANT CLARIFICATION ON EXPERIENCE LOGIC:\n- If job requires \"3 years experience\" → ACCEPT (3 is less than 4, so it's eligible)\n- If job requires \"2+ years experience\" → ACCEPT (2+ is within 0-4 range)\n- If job requires \"1-3 years experience\" → ACCEPT (within range)\n- If job requires \"5+ years experience\" → REJECT (5+ exceeds 4 years maximum)\n\nThe candidate HAS 3-4 years of experience, so they are QUALIFIED for jobs requiring up to 4 years.\n\nLOGIC CHECK: If the job says \"minimum 3 years required\" and the candidate has 3-4 years, that's a MATCH, not a rejection.\n\nReturn this in JSON format:\n{\n  \"keep_job\": \"true or false\"\n}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        176
+      ],
+      "id": "ce178838-5220-42c8-b1a9-6c6d7f67cbc1",
+      "name": "Job Filter",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "RQHRezrlEQUluFwn",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cb38b0c8-2b67-4765-9319-f86555b1796a",
+              "leftValue": "={{ $json.keep_job }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -208,
+        176
+      ],
+      "id": "af9305b1-097c-47ce-bb65-ffd933f6845c",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiResponses = $input.all();\nconst outputItems = [];\n\nfor (const item of aiResponses) {\n  try {\n    // Extract the JSON text from AI's response\n    const jsonText = item.json.content.parts[0].text;\n    \n    // Parse the JSON string\n    const filterDecision = JSON.parse(jsonText);\n    \n    // Combine original job data with filter decision\n    outputItems.push({\n      json: {\n        ...item.json, // Keep all original job data\n        keep_job: filterDecision.keep_job,\n        filter_reason: filterDecision.reason || 'No reason provided'\n      }\n    });\n  } catch (error) {\n    console.log('Error parsing AI filter response:', error);\n    // Skip this item if parsing fails\n  }\n}\n\nreturn outputItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        176
+      ],
+      "id": "d7c25aad-b932-4cb9-a263-e2b4658b3cb6",
+      "name": "Filter Parsing"
+    },
+    {
+      "parameters": {
+        "content": "#\n#      Job Filtering and Compatibility Scoring",
+        "height": 288,
+        "width": 1568
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        80
+      ],
+      "id": "9b14d2ec-89ad-476d-9543-645cb9f31f49",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# Optimization Analysis and Resume Customization",
+        "height": 320,
+        "width": 1568,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        368
+      ],
+      "id": "0a032c0d-f678-4e1d-871d-85111e256636",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "documentURL": "1MiOHqMr1T_yHJCyYjmn86UdeunwW1wIJK9spINXVxaw"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        -352,
+        -112
+      ],
+      "id": "297c87d5-af24-454e-8085-bc4b89ef8dd7",
+      "name": "Get Resume",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "deuGeql0KtirYuDJ",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "documentURL": "1rhXt_AE0uE5LdZUFanhEcYdkBMpkUtdA_IJo_4EV5FA"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        -112
+      ],
+      "id": "12f17c5f-fe63-465c-bbfb-1e41032f6a63",
+      "name": "Get Profile",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "deuGeql0KtirYuDJ",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n    \"count\": 100,\n    \"scrapeCompany\": true,\n    \"urls\": [\n        \"https://www.linkedin.com/jobs/search/?currentJobId=4230986926&distance=25&f_TPR=r39400&geoId=103644278&keywords=Associate%20Product%20Manager&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true\"\n    ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        288,
+        -112
+      ],
+      "id": "fb27dcb1-8a8f-4bba-8169-aa07060ed2c4",
+      "name": "LinkedIn Scrapper"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "openai/gpt-4o-mini",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You're an intelligent bot capable of calculating compatibility score from the job details.",
+              "role": "assistant"
+            },
+            {
+              "content": "=Analyze job compatibility by comparing my actual resume and LinkedIn profile against this specific job posting. Provide a detailed compatibility score and analysis.\n\nMY ACTUAL PROFILE:\nResume: {{ $('Get Resume').item.json.content }}\nLinkedIn Profile: {{ $('Get Profile').item.json.content }}\n\nJOB TO ANALYZE:\nJob Title: {{ $('LinkedIn Scrapper').item.json.title }}\nCompany: {{ $('LinkedIn Scrapper').item.json.companyName }} \nJob Description: {{ $('LinkedIn Scrapper').item.json.descriptionText }}\nExperience Level: {{ $('LinkedIn Scrapper').item.json.seniorityLevel }}\n\n\nProvide a detailed compatibility score, skills match percentage and experience alignment and nothing else in JSON format:\n{\n  \"compatibility_score\": \"\",\n  \"skills_match_percentage\": \"\",\n  \"experience_alignment\": \"excellent/good/fair/poor\"\n}\n\nIMPORTANT: Return compatibility_score and skills_match_percentage as numbers (e.g., 75, not \"75%\")."
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        32,
+        176
+      ],
+      "id": "9720b791-4300-4173-b5a7-5ba4b2279063",
+      "name": "Compatibility Scoring",
+      "credentials": {
+        "openAiApi": {
+          "id": "7XVGP2kXlCpxGtp5",
+          "name": "Open Router"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "anthropic/claude-3.5-haiku",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an expert resume strategist and ATS optimization specialist. Provide detailed, actionable guidance for resume customization based on industry best practices.",
+              "role": "assistant"
+            },
+            {
+              "content": "=Analyze my resume against this job and provide strategic improvement recommendations focusing on ATS optimization, keyword integration, and compelling narrative development.\n\nMY ORIGINAL RESUME: {{ $('Get Resume').item.json.content }}\nMY PROFILE: {{ $('Get Profile').item.json.content }}\n\nTARGET JOB:\nJob Title: {{ $('LinkedIn Scrapper').item.json.title }}\nCompany: {{ $('LinkedIn Scrapper').item.json.companyName }}\nJob Description: {{ $('LinkedIn Scrapper').item.json.descriptionText }}\nSeniority Level: {{ $('LinkedIn Scrapper').item.json.seniorityLevel }}\n\nCOMPATIBILITY SCORE:{{ $json.message.content.compatibility_score }}\n\nProvide improvement guidance and nothing else in JSON format:\n\n{\n  \"resume_status\": \"sufficient/needs_improvement\",\n  \"priority_level\": \"minor/moderate/major\",\n  \"ats_optimization\": {\n    \"missing_keywords\": [\"keyword1\", \"keyword2\"],\n    \"keyword_integration_strategy\": \"how to naturally weave keywords into content\"\n  },\n  \"experience_reframing\": {\n    \"founder_to_pm_narrative\": \"strategic storyline connecting entrepreneurship to product management\",\n    \"pure_yields_positioning\": \"how to reframe Pure Yields co-founder experience to highlight PM-relevant skills like product strategy, user research, data-driven decisions, market analysis, and growth metrics\",\n    \"zomato_positioning\": \"how to position case study for maximum relevance\",\n    \"infosys_technical_angle\": \"technical skills to emphasize for PM transition\",\n    \"cross_experience_story\": \"how Pure Yields + Infosys + Zomato creates a unique PM profile\"\n  },\n  \"summary_strategy\": {\n    \"opening_hook\": \"compelling first line that grabs attention\",\n    \"value_proposition\": \"unique value you bring combining founder, engineer, and PM experience\"\n  }\n}\n\n\nFocus on creating a compelling narrative that positions Pure Yields co-founder experience as exceptional preparation for product management, emphasizing customer-centricity, data-driven decisions, and growth mindset."
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -752,
+        496
+      ],
+      "id": "7ec009be-f80b-4881-831d-ae8c0e4bedc7",
+      "name": "Optimization Analysis",
+      "credentials": {
+        "openAiApi": {
+          "id": "7XVGP2kXlCpxGtp5",
+          "name": "Open Router"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "93b5784d-82dc-43b7-9dd2-a9d0cbfb35f8",
+              "leftValue": "={{ $json.message.content.resume_status }}",
+              "rightValue": "=needs_improvement",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -368,
+        496
+      ],
+      "id": "34e5facd-1314-4f5a-9c2a-56c890c001a9",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "anthropic/claude-3.5-haiku",
+          "mode": "id"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an expert resume writer specializing in impact-driven content that aligns with specific job requirements. Focus on quantified achievements and strategic positioning.",
+              "role": "assistant"
+            },
+            {
+              "content": "=Generate customized resume content sections based on improvement analysis. Use impact-driven bullet point structure: [Impact/Result] + [Action] + [How you did it]. CRITICAL: Stay 100% truthful to actual work performed.\n\nMY ORIGINAL RESUME:{{ $('Get Resume').item.json.content }}\nMY PROFILE:{{ $('Get Profile').item.json.content }}\n\nPlease review both and\n\nTARGET JOB:\nJob Title: {{ $('LinkedIn Scrapper').item.json.title }}\nCompany: {{ $('LinkedIn Scrapper').item.json.companyName }}\nJob Description: {{ $('LinkedIn Scrapper').item.json.descriptionText }}\n\nIMPROVEMENT GUIDANCE:\nATS Keywords: {{ $('Optimization Analysis').item.json.message.content.ats_optimization.missing_keywords }}\nKeyword Strategy: {{ $('Optimization Analysis').item.json.message.content.ats_optimization.keyword_integration_strategy }}\nPure Yields Positioning: {{ $('Optimization Analysis').item.json.message.content.experience_reframing.pure_yields_positioning }}\nZomato Positioning: {{ $('Optimization Analysis').item.json.message.content.experience_reframing.zomato_positioning }}\nInfosys Angle: {{ $('Optimization Analysis').item.json.message.content.experience_reframing.infosys_technical_angle }}\nSummary Hook: {{ $('Optimization Analysis').item.json.message.content.summary_strategy.opening_hook }}\nValue Proposition: {{ $('Optimization Analysis').item.json.message.content.summary_strategy.value_proposition }}\n\n\nBULLET POINT REQUIREMENTS:\n- Use strong action verbs: Led, Drove, Transformed, Pioneered,etc\n- Structure: [Quantified Impact] + [Strategic Action] + [Methodology/Tools]\n- Include metrics and percentages where possible\n- Align language with job description terminology\n- Position Pure Yields experience as product management expertise\n- Make each bullet tell a story of strategic impact\n\nTRUTHFULNESS RULES:\n1. Only describe work actually performed\n2. Use accurate action verbs (analyzed, designed, projected vs. implemented, pioneered, launched)\n3. Clearly distinguish between projections/estimates vs. actual results\n4. Never imply responsibility for work not done\n5. Maintain original achievement levels and scope\n\nPlease review all these details and generate only the tailored content in JSON format:\n{\n  \"professional_summary\": \"2-3 sentence compelling summary tailored for this specific job\",\n  \"enhanced_skills\": {\n    \"product_skills\": \"Enhanced product skills section with job-specific keywords naturally integrated\",\n    \"technical_skills\": \"Enhanced technical skills emphasizing relevant tools and capabilities\",\n    \"functional_skills\": \"Enhanced functional skills highlighting leadership and collaboration\"\n  },\n  \"improved_experience_bullets\": {\n    \"zomato_bullets\": [\n      \"Impact-driven bullet 1 using [Result] + [Action] + [Method] structure\",\n      \"Impact-driven bullet 2 with quantified achievements\", \n      \"Impact-driven bullet 3 aligning with job language\",\n      \"Impact-driven bullet 4 emphasizing relevant PM skills\"\n    ],\n    \"infosys_bullets\": [\n      \"Reframed bullet 1 emphasizing PM-relevant technical skills\",\n      \"Reframed bullet 2 highlighting cross-functional collaboration\",\n      \"Reframed bullet 3 showcasing stakeholder management\",\n      \"Reframed bullet 4 demonstrating data-driven decision making\"\n    ],\n    \"pure_yields_bullets\": [\n      \"Reframed bullet 1 positioning founder experience as PM expertise\",\n      \"Reframed bullet 2 emphasizing product strategy and user research\",\n      \"Reframed bullet 3 highlighting growth metrics and data analysis\",\n      \"Reframed bullet 4 showcasing market analysis and product-market fit\",\n      \"Reframed bullet 5 demonstrating multi-channel product strategy\"\n    ]\n  }\n}\n"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -144,
+        480
+      ],
+      "id": "9c438d53-42ac-48e6-b7ab-0699d9033726",
+      "name": "Resume Customization",
+      "credentials": {
+        "openAiApi": {
+          "id": "7XVGP2kXlCpxGtp5",
+          "name": "Open Router"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        256,
+        496
+      ],
+      "id": "792fba17-6e85-4f8d-aae1-fbd78318a750",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1HGYU3Ps2rXQlgso-ZTkpS5DK9MaRcb9UIAt4jMCVu9A",
+          "mode": "list",
+          "cachedResultName": "Job Search",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HGYU3Ps2rXQlgso-ZTkpS5DK9MaRcb9UIAt4jMCVu9A/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Job Search Results",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HGYU3Ps2rXQlgso-ZTkpS5DK9MaRcb9UIAt4jMCVu9A/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Posted_Date": "={{ $('LinkedIn Scrapper').item.json.postedAt }}",
+            "Number of Applicants": "={{ $('LinkedIn Scrapper').item.json.applicantsCount }}",
+            "Title": "={{ $('LinkedIn Scrapper').item.json.title }}",
+            "Company": "={{ $('LinkedIn Scrapper').item.json.companyName }}",
+            "Location": "={{ $('LinkedIn Scrapper').item.json.location }}",
+            "Experience level": "={{ $('LinkedIn Scrapper').item.json.seniorityLevel }}",
+            "Job Type": "={{ $('LinkedIn Scrapper').item.json.employmentType }}",
+            "Description": "={{ $('LinkedIn Scrapper').item.json.descriptionText }}",
+            "Salary Info": "={{ $('LinkedIn Scrapper').item.json.salaryInfo }}",
+            "Apply_URL": "={{ $('LinkedIn Scrapper').item.json.link }}",
+            "Company website": "={{ $('LinkedIn Scrapper').item.json.companyWebsite }}",
+            "Compatibility Score": "={{ $('Compatibility Scoring').item.json.message.content.compatibility_score }}",
+            "Skill Match Score": "={{ $('Compatibility Scoring').item.json.message.content.skills_match_percentage }}",
+            "Experience Alliginment": "={{ $('Compatibility Scoring').item.json.message.content.experience_alignment }}",
+            "Resume Status": "={{ $('Optimization Analysis').item.json.message.content.resume_status }}",
+            "Priority Level": "={{ $('Optimization Analysis').item.json.message.content.priority_level }}",
+            "Summary": "={{ $('Resume Customization').item.json.message.content.professional_summary }}",
+            "Product Skills": "={{ $('Resume Customization').item.json.message.content.enhanced_skills.product_skills }}",
+            "Technical Skills": "={{ $('Resume Customization').item.json.message.content.enhanced_skills.technical_skills }}",
+            "Functional Skills": "={{ $('Resume Customization').item.json.message.content.enhanced_skills.functional_skills }}",
+            "Zomato Exp": "={{ $('Resume Customization').item.json.message.content.improved_experience_bullets.zomato_bullets[0] }}\n{{ $('Resume Customization').item.json.message.content.improved_experience_bullets.zomato_bullets[1] }}\n{{ $('Resume Customization').item.json.message.content.improved_experience_bullets.zomato_bullets[2] }}\n{{ $('Resume Customization').item.json.message.content.improved_experience_bullets.zomato_bullets[3] }}",
+            "Infosys Exp": "={{ $('Resume Customization').item.json.message.content.improved_experience_bullets.infosys_bullets[0] }}\n{{ $('Resume Customization').item.json.message.content.improved_experience_bullets.infosys_bullets[1] }}\n{{ $('Resume Customization').item.json.message.content.improved_experience_bullets.infosys_bullets[2] }}\n{{ $('Resume Customization').item.json.message.content.improved_experience_bullets.infosys_bullets[3] }}",
+            "Pure Yields Exp": "={{ $('Resume Customization').item.json.message.content.improved_experience_bullets.pure_yields_bullets[0] }}\n{{ $('Resume Customization').item.json.message.content.improved_experience_bullets.pure_yields_bullets[1] }}\n{{ $('Resume Customization').item.json.message.content.improved_experience_bullets.pure_yields_bullets[2] }}\n{{ $('Resume Customization').item.json.message.content.improved_experience_bullets.pure_yields_bullets[3] }}\n{{ $('Resume Customization').item.json.message.content.improved_experience_bullets.pure_yields_bullets[4] }}",
+            "Job Poster Name": "={{ $('LinkedIn Scrapper').item.json.jobPosterName }}",
+            "Job Poster Title": "={{ $('LinkedIn Scrapper').item.json.jobPosterTitle }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Posted_Date",
+              "displayName": "Posted_Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Number of Applicants",
+              "displayName": "Number of Applicants",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Experience level",
+              "displayName": "Experience level",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Job Type",
+              "displayName": "Job Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Compatibility Score",
+              "displayName": "Compatibility Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Skill Match Score",
+              "displayName": "Skill Match Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Experience Alliginment",
+              "displayName": "Experience Alliginment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Description",
+              "displayName": "Description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Salary Info",
+              "displayName": "Salary Info",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Resume Status",
+              "displayName": "Resume Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Priority Level",
+              "displayName": "Priority Level",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Product Skills",
+              "displayName": "Product Skills",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Technical Skills",
+              "displayName": "Technical Skills",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Functional Skills",
+              "displayName": "Functional Skills",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Agent Exp",
+              "displayName": "AI Agent Exp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Infosys Exp",
+              "displayName": "Infosys Exp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Pure Yields Exp",
+              "displayName": "Pure Yields Exp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Zomato Exp",
+              "displayName": "Zomato Exp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Apply_URL",
+              "displayName": "Apply_URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Applied",
+              "displayName": "Applied",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Job Poster Name",
+              "displayName": "Job Poster Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Job Poster Title",
+              "displayName": "Job Poster Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Company website",
+              "displayName": "Company website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        448,
+        496
+      ],
+      "id": "292474ec-04f7-4bae-a261-4c4e259b798b",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "nBDmteTfFaBU9EDo",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Get Resume",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Optimization Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job Filter": {
+      "main": [
+        [
+          {
+            "node": "Filter Parsing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Parsing": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Compatibility Scoring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Resume": {
+      "main": [
+        [
+          {
+            "node": "Get Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Profile": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn Scrapper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn Scrapper": {
+      "main": [
+        [
+          {
+            "node": "Job Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compatibility Scoring": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Optimization Analysis": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Resume Customization",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Resume Customization": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "92793525-9491-4ead-9d40-7479b1fefe6e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8150224b6fb0ddede5bf0bf58720541afc2fe971038d8e2080c97255a1c9ceb2"
+  },
+  "id": "719fakuZs4eIO1Cw",
+  "tags": []
+}
